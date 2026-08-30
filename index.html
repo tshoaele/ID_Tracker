@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Identity Tracker</title>
+<meta name="description" content="Private habit tracker built on Atomic Habits principles, fully offline.">
+<meta name="theme-color" content="#f4f4f2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!--
+  BUILD LOG
+  - v0.1 built on top of vuja-base-template.html
+  - Three habit slots: one avoid type, two build type
+  - Fully offline, localStorage only, no API calls anywhere
+  - Rajdhani loaded from Google Fonts, with a system font fallback
+    so the app still works fully offline if that first load fails
+    or if there is no connection at all when it first opens
+-->
+
+<style>
+  :root {
+    --bg: #f4f4f2;
+    --surface: #ffffff;
+    --text: #16181c;
+    --text-dim: #5a5f66;
+    --border: #d9dbdd;
+    --accent: #1f6feb;
+    --warn: #b8860b;
+    --danger: #c0392b;
+    --radius: 10px;
+    --font-display: 'Rajdhani', 'Segoe UI', sans-serif;
+    --font-body: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  }
+
+  [data-theme="dark"] {
+    --bg: #0e1013;
+    --surface: #1a1d21;
+    --text: #eef0f2;
+    --text-dim: #9aa0a6;
+    --border: #2a2e33;
+    --accent: #4a9eff;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  header h1 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin: 0;
+  }
+
+  #theme-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: var(--font-body);
+  }
+
+  main {
+    flex: 1;
+    padding: 20px;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .label-input {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    padding: 2px 0;
+    width: 60%;
+  }
+
+  .label-input:focus {
+    outline: none;
+    border-bottom: 1px solid var(--accent);
+  }
+
+  .type-tag {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .identity-input {
+    width: 100%;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--text-dim);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--border);
+    padding: 4px 0;
+    font-family: var(--font-body);
+  }
+
+  .identity-input:focus { outline: none; border-bottom-color: var(--accent); }
+
+  .timer {
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin: 14px 0 4px;
+  }
+
+  .timer-sub {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  .streak-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 14px 0 4px;
+  }
+
+  .streak-count {
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 700;
+  }
+
+  .streak-label { font-size: 12px; color: var(--text-dim); }
+
+  .status-line {
+    font-size: 12px;
+    padding: 6px 0;
+  }
+
+  .status-ok { color: var(--text-dim); }
+  .status-warn { color: var(--warn); }
+  .status-milestone { color: var(--accent); font-weight: 600; }
+
+  .row-buttons { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+  button.action {
+    font-family: var(--font-body);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  button.action.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  button.action.danger {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: transparent;
+  }
+
+  .cue-input {
+    width: 100%;
+    margin-top: 10px;
+    font-size: 12px;
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    font-family: var(--font-body);
+  }
+
+  .cue-input:focus { outline: none; border-color: var(--accent); }
+
+  footer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 14px;
+  }
+
+  #self-check-toggle {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+
+  #self-check-panel {
+    position: fixed;
+    bottom: 64px;
+    right: 16px;
+    width: 260px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    display: none;
+    font-size: 12px;
+  }
+
+  #self-check-panel.open { display: block; }
+  #self-check-panel h2 { font-family: var(--font-display); font-size: 13px; margin: 0 0 8px; }
+  #self-check-list { list-style: none; margin: 0 0 8px; padding: 0; }
+  #self-check-list li { padding: 6px 0; border-bottom: 1px solid var(--border); color: var(--text-dim); }
+  #self-check-form { display: flex; gap: 6px; }
+  #self-check-form input {
+    flex: 1; padding: 6px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text); font-size: 12px; font-family: var(--font-body);
+  }
+  #self-check-form button {
+    border: none; background: var(--accent); color: #fff; border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Identity Tracker</h1>
+  <button id="theme-toggle" type="button">Dark</button>
+</header>
+
+<main id="app-content"></main>
+
+<footer>Vuja Tsoaela</footer>
+
+<button id="self-check-toggle" type="button" title="Self Check log">✓</button>
+<div id="self-check-panel">
+  <h2>Self Check Log</h2>
+  <ul id="self-check-list"></ul>
+  <form id="self-check-form">
+    <input id="self-check-input" type="text" placeholder="What did you just test?">
+    <button type="submit">Log</button>
+  </form>
+</div>
+
+<script>
+  const APP_NAME = "identity-tracker";
+
+  function save(key, value) {
+    try { localStorage.setItem(APP_NAME + ":" + key, JSON.stringify(value)); return true; }
+    catch (err) { console.error("Save failed:", err); return false; }
+  }
+  function load(key, fallback) {
+    try {
+      const raw = localStorage.getItem(APP_NAME + ":" + key);
+      return raw === null ? fallback : JSON.parse(raw);
+    } catch (err) { console.error("Load failed:", err); return fallback; }
+  }
+
+  const themeToggle = document.getElementById("theme-toggle");
+  const savedTheme = load("theme", "light");
+  if (savedTheme === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+    themeToggle.textContent = "Light";
+  }
+  themeToggle.addEventListener("click", () => {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    if (isDark) {
+      document.documentElement.removeAttribute("data-theme");
+      themeToggle.textContent = "Dark";
+      save("theme", "light");
+    } else {
+      document.documentElement.setAttribute("data-theme", "dark");
+      themeToggle.textContent = "Light";
+      save("theme", "dark");
+    }
+  });
+
+  const checkToggle = document.getElementById("self-check-toggle");
+  const checkPanel = document.getElementById("self-check-panel");
+  const checkList = document.getElementById("self-check-list");
+  const checkForm = document.getElementById("self-check-form");
+  const checkInput = document.getElementById("self-check-input");
+
+  function renderChecks() {
+    const entries = load("selfchecks", []);
+    checkList.innerHTML = "";
+    if (entries.length === 0) { checkList.innerHTML = "<li>No checks logged yet.</li>"; return; }
+    entries.slice().reverse().forEach(entry => {
+      const li = document.createElement("li");
+      li.textContent = entry.time + " — " + entry.note;
+      checkList.appendChild(li);
+    });
+  }
+  checkToggle.addEventListener("click", () => { checkPanel.classList.toggle("open"); renderChecks(); });
+  checkForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const note = checkInput.value.trim();
+    if (!note) return;
+    const entries = load("selfchecks", []);
+    entries.push({ time: new Date().toLocaleString(), note: note });
+    save("selfchecks", entries);
+    checkInput.value = "";
+    renderChecks();
+  });
+
+  // -----------------------------------------------------------
+  // HABIT CONFIG
+  // avoid type: tracks continuous time since last reset, resets to
+  // zero the moment you log a slip, real time counter runs while
+  // the tab is open, and recalculates correctly even after the
+  // tab was fully closed, because it is based on a stored start
+  // timestamp compared against the current time, not a background
+  // process that has to keep running
+  // build type: tracks a daily streak, you check it off once a day
+  // -----------------------------------------------------------
+  const DEFAULT_HABITS = [
+    { id: "h1", type: "avoid", label: "Focus", identity: "I am someone who protects my attention." },
+    { id: "h2", type: "build", label: "Reading", identity: "I am someone who reads every day." },
+    { id: "h3", type: "build", label: "Podcast", identity: "I am someone who learns every day." }
+  ];
+
+  const MILESTONE_DAYS = [1, 3, 7, 14, 21, 30, 60, 90, 180, 365];
+
+  let habits = load("habitsConfig", DEFAULT_HABITS);
+  let cues = load("habitCues", {});
+  let data = load("habitsData", {});
+
+  habits.forEach(h => {
+    if (!data[h.id]) {
+      data[h.id] = h.type === "avoid"
+        ? { since: Date.now(), celebrated: [] }
+        : { lastDate: null, streak: 0 };
+    }
+  });
+  save("habitsData", data);
+
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  function daysBetween(a, b) {
+    const msPerDay = 24 * 60 * 60 * 1000;
+    return Math.round((new Date(b) - new Date(a)) / msPerDay);
+  }
+
+  function formatElapsed(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return { days, hours, minutes, seconds };
+  }
+
+  const app = document.getElementById("app-content");
+
+  function buildCardShell(h) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.id = "card-" + h.id;
+
+    const top = document.createElement("div");
+    top.className = "card-top";
+    const labelInput = document.createElement("input");
+    labelInput.className = "label-input";
+    labelInput.value = h.label;
+    labelInput.addEventListener("change", () => {
+      h.label = labelInput.value.trim() || h.label;
+      save("habitsConfig", habits);
+    });
+    const typeTag = document.createElement("span");
+    typeTag.className = "type-tag";
+    typeTag.textContent = h.type === "avoid" ? "Avoid" : "Build";
+    top.appendChild(labelInput);
+    top.appendChild(typeTag);
+    card.appendChild(top);
+
+    const identityInput = document.createElement("input");
+    identityInput.className = "identity-input";
+    identityInput.value = h.identity;
+    identityInput.addEventListener("change", () => {
+      h.identity = identityInput.value.trim() || h.identity;
+      save("habitsConfig", habits);
+    });
+    card.appendChild(identityInput);
+
+    const body = document.createElement("div");
+    body.className = "card-body";
+    card.appendChild(body);
+
+    const cueInput = document.createElement("input");
+    cueInput.className = "cue-input";
+    cueInput.placeholder = "Habit stacking cue: after I ___, I will ___";
+    cueInput.value = cues[h.id] || "";
+    cueInput.addEventListener("change", () => {
+      cues[h.id] = cueInput.value.trim();
+      save("habitCues", cues);
+    });
+    card.appendChild(cueInput);
+
+    return { card, body };
+  }
+
+  function renderAvoid(h, body) {
+    const d = data[h.id];
+    const elapsed = Date.now() - d.since;
+    const t = formatElapsed(elapsed);
+
+    body.innerHTML = "";
+
+    const timer = document.createElement("div");
+    timer.className = "timer";
+    timer.textContent = t.days + "d " + String(t.hours).padStart(2, "0") + "h " + String(t.minutes).padStart(2, "0") + "m " + String(t.seconds).padStart(2, "0") + "s";
+    body.appendChild(timer);
+
+    const sub = document.createElement("div");
+    sub.className = "timer-sub";
+    sub.textContent = "Since " + new Date(d.since).toLocaleString();
+    body.appendChild(sub);
+
+    const nextMilestone = MILESTONE_DAYS.find(m => m > t.days);
+    if (nextMilestone) {
+      const status = document.createElement("div");
+      status.className = "status-line status-ok";
+      status.textContent = (nextMilestone - t.days) + " day(s) to the next milestone, day " + nextMilestone + ".";
+      body.appendChild(status);
+    }
+
+    if (MILESTONE_DAYS.includes(t.days) && !d.celebrated.includes(t.days)) {
+      d.celebrated.push(t.days);
+      save("habitsData", data);
+      const milestone = document.createElement("div");
+      milestone.className = "status-line status-milestone";
+      milestone.textContent = "Milestone reached: day " + t.days + ".";
+      body.appendChild(milestone);
+    }
+
+    const rowButtons = document.createElement("div");
+    rowButtons.className = "row-buttons";
+    const resetBtn = document.createElement("button");
+    resetBtn.className = "action danger";
+    resetBtn.type = "button";
+    resetBtn.textContent = "Log a reset";
+    resetBtn.addEventListener("click", () => {
+      d.since = Date.now();
+      d.celebrated = [];
+      save("habitsData", data);
+      renderAvoid(h, body);
+    });
+    rowButtons.appendChild(resetBtn);
+    body.appendChild(rowButtons);
+  }
+
+  function renderBuild(h, body) {
+    const d = data[h.id];
+    body.innerHTML = "";
+
+    const row = document.createElement("div");
+    row.className = "streak-row";
+    const count = document.createElement("div");
+    count.className = "streak-count";
+    count.textContent = d.streak;
+    const label = document.createElement("div");
+    label.className = "streak-label";
+    label.textContent = "day streak";
+    row.appendChild(count);
+    row.appendChild(label);
+    body.appendChild(row);
+
+    let statusText = "";
+    let statusClass = "status-ok";
+
+    if (d.lastDate) {
+      const gap = daysBetween(d.lastDate, todayStr());
+      if (gap === 1) {
+        statusText = "Missed yesterday. Do it today, the rule is never miss twice.";
+        statusClass = "status-warn";
+      } else if (gap >= 2) {
+        statusText = "Streak reset after " + gap + " days away.";
+        statusClass = "status-warn";
+      } else if (gap === 0) {
+        statusText = "Already logged today.";
+      }
+    } else {
+      statusText = "No entries yet.";
+    }
+
+    if (statusText) {
+      const status = document.createElement("div");
+      status.className = "status-line " + statusClass;
+      status.textContent = statusText;
+      body.appendChild(status);
+    }
+
+    const rowButtons = document.createElement("div");
+    rowButtons.className = "row-buttons";
+    const doneBtn = document.createElement("button");
+    doneBtn.className = "action primary";
+    doneBtn.type = "button";
+    doneBtn.textContent = "Mark today done";
+    const today = todayStr();
+    doneBtn.disabled = d.lastDate === today;
+    doneBtn.addEventListener("click", () => {
+      const gap = d.lastDate ? daysBetween(d.lastDate, today) : null;
+      if (gap === null || gap >= 2) {
+        d.streak = 1;
+      } else if (gap === 1) {
+        d.streak += 1;
+      }
+      d.lastDate = today;
+      save("habitsData", data);
+      renderBuild(h, body);
+    });
+    rowButtons.appendChild(doneBtn);
+    body.appendChild(rowButtons);
+  }
+
+  function renderAll() {
+    app.innerHTML = "";
+    habits.forEach(h => {
+      const { card, body } = buildCardShell(h);
+      app.appendChild(card);
+      if (h.type === "avoid") renderAvoid(h, body);
+      else renderBuild(h, body);
+    });
+  }
+
+  renderAll();
+  setInterval(() => {
+    habits.forEach(h => {
+      if (h.type === "avoid") {
+        const body = document.querySelector("#card-" + h.id + " .card-body");
+        if (body) renderAvoid(h, body);
+      }
+    });
+  }, 1000);
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
